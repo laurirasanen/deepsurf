@@ -11,7 +11,8 @@ from entities.helpers import index_from_edict
 from mathlib import Vector, NULL_VECTOR, QAngle, NULL_QANGLE
 
 # deepsurf
-from ..hud import draw_hud
+from .hud import draw_hud
+
 
 # =============================================================================
 # >> CLASSES

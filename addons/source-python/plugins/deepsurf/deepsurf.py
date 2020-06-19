@@ -5,16 +5,14 @@
 # =============================================================================
 # Source.Python
 from cvars import ConVar
-from engines.server import server, execute_server_command, queue_command_string
+from engines.server import server, queue_command_string
 from events import Event
 from listeners import OnTick
 from mathlib import Vector
-from messages.hooks import HookUserMessage
-from players.entity import Player
 
 # deepsurf
 from .core.zone import Segment, Zone
-from .core.commands import register_commands, CommandHandler
+from .core import commands
 from .core.bot import Bot
 from .core.config import apply_cvars
 
@@ -24,12 +22,12 @@ from .core.config import apply_cvars
 bot = Bot("DeepSurf")
 segment = Segment()
 
+
 # =============================================================================
 # >> LISTENERS
 # =============================================================================
 def load():
     """Called when Source.Python loads the plugin."""
-    register_commands()
     queue_command_string("exec surf")
     apply_cvars()
 
@@ -61,33 +59,3 @@ def on_tick():
     if server.tick % 67 == 0:
         if segment is not None:
             segment.draw()
-
-
-@HookUserMessage("SayText2")
-def saytext2_hook(recipient, data):
-    """Hook SayText2 for commands."""
-    # TODO: register console commands instead of parsing chat
-
-    # Server
-    if data["index"] == 0:
-        return
-
-    receiving_player_index = list(recipient)[0]
-    sending_player_index = data["index"]
-
-    # Handle commands
-    if (
-        receiving_player_index
-        and sending_player_index
-        and receiving_player_index == sending_player_index
-        and len(data["param2"]) > 1
-        and data["param2"][0] in CommandHandler.instance().prefix
-    ):
-        recipient.update([])
-        command_response = CommandHandler.instance().check_command(
-            data["param2"][1:], Player(sending_player_index)
-        )
-        if command_response:
-            data["message"] = command_response
-            data["index"] = 0
-            recipient.update([sending_player_index])

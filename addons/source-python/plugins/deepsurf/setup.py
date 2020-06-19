@@ -13,6 +13,7 @@ if __name__ == "__main__":
     assert sys.version_info.major == 3
     assert platform.architecture()[0] == "32bit"
 
+    # install requirements to /addons/source-python/packages/site-packages/
     with open("requirements.txt") as requirements:
         pipmain(
             [

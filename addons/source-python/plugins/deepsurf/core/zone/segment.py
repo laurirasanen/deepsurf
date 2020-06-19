@@ -6,11 +6,12 @@
 # deepsurf
 from .zone import Zone
 
+
 # =============================================================================
 # >> CLASSES
 # =============================================================================
 class Segment:
-    """Base Segment for Maps"""
+    """Collection of zones for maps, stages, etc."""
 
     def __init__(self):
         """Create a new Segment."""
