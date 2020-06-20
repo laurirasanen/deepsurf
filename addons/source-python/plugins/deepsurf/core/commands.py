@@ -101,6 +101,12 @@ def _loadcfg_handler(command, index: int = 0):
         command.index)
 
 
+@TypedSayCommand("!spawn")
+@TypedClientCommand("ds_spawn")
+def _train_handler(command):
+    Bot.instance().spawn()
+
+
 @TypedSayCommand("!train")
 @TypedClientCommand("ds_train")
 def _train_handler(command):
@@ -108,7 +114,6 @@ def _train_handler(command):
         SayText2("[deepsurf] Invalid segment").send(command.index)
         return
 
-    Bot.instance().spawn()
     Bot.instance().train()
 
 
@@ -119,5 +124,10 @@ def _run_handler(command):
         SayText2("[deepsurf] Invalid segment").send(command.index)
         return
 
-    Bot.instance().spawn()
     Bot.instance().run()
+
+
+@TypedSayCommand("!stop")
+@TypedClientCommand("ds_stop")
+def _run_handler(command):
+    Bot.instance().stop()

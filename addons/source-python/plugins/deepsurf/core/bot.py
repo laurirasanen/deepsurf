@@ -3,15 +3,23 @@
 # =============================================================================
 # >> IMPORTS
 # =============================================================================
+# Python
+import math
+
 # Source.Python
-from engines.server import engine_server
-from players.entity import Player
-from players.bots import bot_manager, BotCmd
+from engines.trace import engine_trace
+from engines.trace import ContentMasks
+from engines.trace import GameTrace
+from engines.trace import Ray
+from engines.trace import TraceFilterSimple
 from entities.helpers import index_from_edict
-from mathlib import NULL_VECTOR, QAngle, NULL_QANGLE
+from mathlib import Vector, NULL_VECTOR, QAngle, NULL_QANGLE
+from players.bots import bot_manager, BotCmd
+from players.entity import Player
 
 # deepsurf
 from .hud import draw_hud
+from .zone import Segment
 
 
 # =============================================================================
@@ -46,11 +54,11 @@ class Bot:
 
         bot_edict = bot_manager.create_bot("DeepSurf")
         if bot_edict is None:
-            raise ValueError("Failed to create a bot.")
+            raise ValueError("Failed to create a bot")
 
         self.controller = bot_manager.get_bot_controller(bot_edict)
         if self.controller is None:
-            raise ValueError("Failed to get the bot controller.")
+            raise ValueError("Failed to get bot controller")
 
         self.bot = Player(index_from_edict(bot_edict))
         self.bot.set_noblock(True)
@@ -63,12 +71,12 @@ class Bot:
         if self.bot is None:
             return
 
-        if self.start_zone is None:
+        if Segment.instance().start_zone is None:
             print("[deepsurf] No start zone")
             return
 
-        self.bot.teleport(self.start_zone.point, NULL_QANGLE, NULL_VECTOR)
-        self.bot.set_view_angle(QAngle(0, self.start_zone.orientation, 0))
+        self.bot.teleport(Segment.instance().start_zone.point, NULL_QANGLE, NULL_VECTOR)
+        self.bot.set_view_angle(QAngle(0, Segment.instance().start_zone.orientation, 0))
 
     def kick(self, reason):
         if self.bot is not None:
@@ -77,14 +85,19 @@ class Bot:
             self.controller = None
 
     def train(self):
-        self.reset()
         self.running = False
         self.training = True
+        self.reset()
 
     def run(self):
-        self.reset()
         self.training = False
         self.running = True
+        self.reset()
+
+    def stop(self):
+        self.training = False
+        self.running = False
+        self.reset()
 
     def tick(self):
         if self.bot is None or self.controller is None:
@@ -93,27 +106,27 @@ class Bot:
         if self.training is False and self.running is False:
             return
 
-        rays = self.raycast()
-
-        (move_input, aim_input) = self.get_action()
-        bcmd = self.get_cmd(move_input, aim_input)
+        point_cloud = self.get_point_cloud()
+        velocity = self.bot.get_property_vector("m_vecVelocity")
+        (move_action, aim_action) = self.get_action(point_cloud, velocity)
+        bcmd = self.get_cmd(move_action, aim_action)
         self.controller.run_player_move(bcmd)
 
         draw_hud(self.bot)
 
-    def get_cmd(self, move_input=0, aim_input=0):
+    def get_cmd(self, move_action=0, aim_action=0):
         """Get BotCmd for move direction and aim delta"""
 
         bcmd = BotCmd()
         bcmd.reset()
         view_angles = self.bot.view_angle
 
-        if aim_input != 0:
-            view_angles.y -= aim_input
+        if aim_action != 0:
+            view_angles.y -= aim_action
 
         bcmd.view_angles = view_angles
 
-        if move_input != 0:
+        if move_action != 0:
             # Map move direction to forward + side axis
             move_speed = 400
             move_options = {
@@ -126,20 +139,79 @@ class Bot:
                 7: {"forward_move": 0, "side_move": -move_speed},
                 8: {"forward_move": move_speed, "side_move": -move_speed},
             }
-            move = move_options[move_input]
+            move = move_options[move_action]
             bcmd.forward_move = move["forward_move"]
             bcmd.side_move = move["side_move"]
 
         return bcmd
 
-    def get_action(self):
+    def get_action(self, point_cloud, velocity):
         # TODO: get action from NN here
-        move_input = 0
-        aim_input = 0
-        return (move_input, aim_input)
+        print(f"[deepsurf] velocity {velocity}")
+        print(f"[deepsurf] p0 distance {point_cloud[0]['distance']}")
+        move_action = 0
+        aim_action = 0
+        return (move_action, aim_action)
 
-    def raycast(self):
-        rays = []
-        # TODO: send raycasts in a sphere around bot,
-        # for each return distance and if surface is a teleport
-        return rays
+    def get_point_cloud(self):
+        points = []
+
+        # TODO: figure out better way to get directions
+        directions = [
+            Vector(0.0, 1.0, 0.0),  # F
+            Vector(1.0, 1.0, 0.0),  # FR
+            Vector(1.0, 0.0, 0.0),  # R
+            Vector(1.0, -1.0, 0.0),  # BR
+            Vector(0.0, -1.0, 0.0),  # B
+            Vector(-1.0, -1.0, 0.0),  # BL
+            Vector(-1.0, 0.0, 0.0),  # L
+            Vector(-1.0, 1.0, 0.0),  # FL
+        ]
+        # Transform to local space of bot, where
+        # y = forward
+        # x = right
+        # z = up
+        orientation = -self.bot.view_angle.y
+        for direction in directions:
+            x = direction.x * math.cos(orientation) - direction.y * math.sin(orientation)
+            y = direction.x * math.sin(orientation) + direction.y * math.cos(orientation)
+            direction.x = x
+            direction.y = y
+
+        down_and_up = []
+        for direction in directions:
+            down_and_up.append(direction + Vector(0.0, 0.0, -1.0))
+        down_and_up.append(Vector(0.0, 0.0, -1.0))
+        for direction in directions:
+            down_and_up.append(direction + Vector(0.0, 0.0, 1.0))
+        down_and_up.append(Vector(0.0, 0.0, 1.0))
+        directions.extend(down_and_up)
+
+        for direction in directions:
+            point = self.get_single_point(Vector.normalized(direction), 10000.0)
+            points.append(point)
+
+        return points
+
+    def get_single_point(self, direction: Vector, distance: float):
+        point = {
+            "distance": distance,
+            "teleport": False
+        }
+
+        destination = self.bot.origin + direction * distance
+        trace = GameTrace()
+
+        engine_trace.trace_ray(
+            Ray(self.bot.origin, destination),
+            ContentMasks.PLAYER_SOLID,  # TODO: PLAYER_SOLID probably doesn't include teleport triggers
+            # Ignore bot
+            TraceFilterSimple((self.bot,)),
+            trace
+        )
+
+        if trace.did_hit():
+            point["distance"] = Vector.get_distance(self.bot.origin, trace.end_position)
+            # TODO: check if teleport trigger
+
+        return point

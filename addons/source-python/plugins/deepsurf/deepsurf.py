@@ -7,6 +7,7 @@
 from engines.server import server, queue_command_string
 from events import Event
 from listeners import OnTick
+from players.entity import Player
 
 # deepsurf
 from .core.zone import Segment
@@ -33,8 +34,6 @@ def unload():
 @Event("player_spawn")
 def on_player_spawn(game_event):
     queue_command_string("mp_waitingforplayers_cancel 1")
-    if game_event.userid == Bot.instance().bot.index:
-        Bot.instance().reset()
 
 
 @OnTick
