@@ -8,7 +8,7 @@ from engines.server import engine_server
 from players.entity import Player
 from players.bots import bot_manager, BotCmd
 from entities.helpers import index_from_edict
-from mathlib import Vector, NULL_VECTOR, QAngle, NULL_QANGLE
+from mathlib import NULL_VECTOR, QAngle, NULL_QANGLE
 
 # deepsurf
 from .hud import draw_hud
@@ -20,25 +20,31 @@ from .hud import draw_hud
 class Bot:
     """A controllable bot class"""
 
-    def __init__(self, name):
+    __instance = None
+
+    @staticmethod
+    def instance():
+        """Singleton instance"""
+        if Bot.__instance is None:
+            Bot()
+        return Bot.__instance
+
+    def __init__(self):
         """Create a new bot"""
-        self.name = name
+        if Bot.__instance is not None:
+            raise Exception("This class is a singleton, use .instance() access method.")
+
         self.bot = None
         self.controller = None
-        self.start_zone = None
-        self.end_zone = None
-        self.checkpoints = None
-
-    def set_segment(self, segment):
-        self.start_zone = segment.start_zone
-        self.end_zone = segment.end_zone
-        self.checkpoints = segment.checkpoints
+        self.training = False
+        self.running = False
+        Bot.__instance = self
 
     def spawn(self):
         if self.bot is not None or self.controller is not None:
-            raise ValueError("Bot already exists")
+            return
 
-        bot_edict = bot_manager.create_bot(self.name)
+        bot_edict = bot_manager.create_bot("DeepSurf")
         if bot_edict is None:
             raise ValueError("Failed to create a bot.")
 
@@ -56,8 +62,11 @@ class Bot:
     def reset(self):
         if self.bot is None:
             return
+
         if self.start_zone is None:
-            raise ValueError("No start zone")
+            print("[deepsurf] No start zone")
+            return
+
         self.bot.teleport(self.start_zone.point, NULL_QANGLE, NULL_VECTOR)
         self.bot.set_view_angle(QAngle(0, self.start_zone.orientation, 0))
 
@@ -67,9 +76,24 @@ class Bot:
             self.bot = None
             self.controller = None
 
+    def train(self):
+        self.reset()
+        self.running = False
+        self.training = True
+
+    def run(self):
+        self.reset()
+        self.training = False
+        self.running = True
+
     def tick(self):
         if self.bot is None or self.controller is None:
             return
+
+        if self.training is False and self.running is False:
+            return
+
+        rays = self.raycast()
 
         (move_input, aim_input) = self.get_action()
         bcmd = self.get_cmd(move_input, aim_input)
@@ -113,3 +137,9 @@ class Bot:
         move_input = 0
         aim_input = 0
         return (move_input, aim_input)
+
+    def raycast(self):
+        rays = []
+        # TODO: send raycasts in a sphere around bot,
+        # for each return distance and if surface is a teleport
+        return rays
