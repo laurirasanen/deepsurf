@@ -7,12 +7,15 @@
 import math
 
 # Source.Python
+from effects import beam
+from engines.precache import Model
 from engines.trace import engine_trace
 from engines.trace import ContentMasks
 from engines.trace import GameTrace
 from engines.trace import Ray
 from engines.trace import TraceFilterSimple
 from entities.helpers import index_from_edict
+from filters.recipients import RecipientFilter
 from mathlib import Vector, NULL_VECTOR, QAngle, NULL_QANGLE
 from players.bots import bot_manager, BotCmd
 from players.entity import Player
@@ -20,6 +23,36 @@ from players.entity import Player
 # deepsurf
 from .hud import draw_hud
 from .zone import Segment
+
+# =============================================================================
+# >> GLOBAL VARIABLES
+# =============================================================================
+debug = True
+beam_model = Model('sprites/laserbeam.vmt')
+point_directions = []
+# the actual number of directions will be
+# x - sqrt(x) + 2, e.g. 100 -> 92
+# because we only need 1 for both directly up and down
+num_directions = int(round(math.sqrt(100)))
+increment = 360.0 / num_directions
+theta = 0.0
+phi = 0.0
+
+for i in range(0, num_directions + 1):  # theta in range [0.0 : 180.0]
+    for j in range(0, num_directions):  # phi in range [0.0 : 360.0 - increment]
+        x = math.sin(math.radians(theta)) * math.cos(math.radians(phi))
+        y = math.sin(math.radians(theta)) * math.sin(math.radians(phi))
+        z = math.cos(math.radians(theta))
+        point_directions.append(Vector(x, y, z))
+
+        # only need one direction at north and south poles
+        if i == 0 or i == num_directions:
+            break
+
+        phi += increment
+
+    theta += increment * 0.5  # theta only changes by 180
+    phi = 0.0
 
 
 # =============================================================================
@@ -46,6 +79,7 @@ class Bot:
         self.controller = None
         self.training = False
         self.running = False
+        self.drawn_directions = 32
         Bot.__instance = self
 
     def spawn(self):
@@ -147,8 +181,6 @@ class Bot:
 
     def get_action(self, point_cloud, velocity):
         # TODO: get action from NN here
-        print(f"[deepsurf] velocity {velocity}")
-        print(f"[deepsurf] p0 distance {point_cloud[0]['distance']}")
         move_action = 0
         aim_action = 0
         return (move_action, aim_action)
@@ -156,44 +188,26 @@ class Bot:
     def get_point_cloud(self):
         points = []
 
-        # TODO: figure out better way to get directions
-        directions = [
-            Vector(0.0, 1.0, 0.0),  # F
-            Vector(1.0, 1.0, 0.0),  # FR
-            Vector(1.0, 0.0, 0.0),  # R
-            Vector(1.0, -1.0, 0.0),  # BR
-            Vector(0.0, -1.0, 0.0),  # B
-            Vector(-1.0, -1.0, 0.0),  # BL
-            Vector(-1.0, 0.0, 0.0),  # L
-            Vector(-1.0, 1.0, 0.0),  # FL
-        ]
-        # Transform to local space of bot, where
-        # y = forward
-        # x = right
-        # z = up
-        orientation = -self.bot.view_angle.y
+        # Transform to local space of bot
+        directions = point_directions.copy()
+        orientation = self.bot.view_angle.y
         for direction in directions:
             x = direction.x * math.cos(orientation) - direction.y * math.sin(orientation)
             y = direction.x * math.sin(orientation) + direction.y * math.cos(orientation)
             direction.x = x
             direction.y = y
 
-        down_and_up = []
+        direction_num = 1
         for direction in directions:
-            down_and_up.append(direction + Vector(0.0, 0.0, -1.0))
-        down_and_up.append(Vector(0.0, 0.0, -1.0))
-        for direction in directions:
-            down_and_up.append(direction + Vector(0.0, 0.0, 1.0))
-        down_and_up.append(Vector(0.0, 0.0, 1.0))
-        directions.extend(down_and_up)
-
-        for direction in directions:
-            point = self.get_single_point(Vector.normalized(direction), 10000.0)
+            point = self.get_single_point(Vector.normalized(direction), 10000.0, direction_num)
+            direction_num += 1
             points.append(point)
+
+        self.drawn_directions += 32
 
         return points
 
-    def get_single_point(self, direction: Vector, distance: float):
+    def get_single_point(self, direction: Vector, distance: float, direction_num):
         point = {
             "distance": distance,
             "teleport": False
@@ -213,5 +227,14 @@ class Bot:
         if trace.did_hit():
             point["distance"] = Vector.get_distance(self.bot.origin, trace.end_position)
             # TODO: check if teleport trigger
+            if debug is True and self.drawn_directions - 32 < direction_num <= self.drawn_directions:
+                beam(RecipientFilter(), start=self.bot.origin, end=trace.end_position, parent=False, life_time=100,
+                     red=0, green=255, blue=0, alpha=255, speed=1, model_index=beam_model.index, start_width=0.4,
+                     end_width=0.4)
+        else:
+            if debug is True and self.drawn_directions - 32 < direction_num <= self.drawn_directions:
+                beam(RecipientFilter(), start=self.bot.origin, end=trace.end_position, parent=False, life_time=100,
+                     red=255, green=0, blue=0, alpha=255, speed=1, model_index=beam_model.index, start_width=0.4,
+                     end_width=0.4)
 
         return point
