@@ -27,7 +27,7 @@ from .zone import Segment
 # =============================================================================
 # >> GLOBAL VARIABLES
 # =============================================================================
-debug = True
+debug = False
 beam_model = Model('sprites/laserbeam.vmt')
 point_directions = []
 # the actual number of directions will be
@@ -203,14 +203,16 @@ class Bot:
             direction_num += 1
             points.append(point)
 
-        self.drawn_directions += 32
+        if debug:
+            # can only draw 32 temporary entities per frame
+            self.drawn_directions += 32
 
         return points
 
     def get_single_point(self, direction: Vector, distance: float, direction_num):
         point = {
             "distance": distance,
-            "teleport": False
+            "surface_type": 0
         }
 
         destination = self.bot.origin + direction * distance
@@ -218,7 +220,7 @@ class Bot:
 
         engine_trace.trace_ray(
             Ray(self.bot.origin, destination),
-            ContentMasks.PLAYER_SOLID,  # TODO: PLAYER_SOLID probably doesn't include teleport triggers
+            ContentMasks.ALL,  # TODO: this doesn't hit teleport triggers
             # Ignore bot
             TraceFilterSimple((self.bot,)),
             trace
@@ -226,15 +228,15 @@ class Bot:
 
         if trace.did_hit():
             point["distance"] = Vector.get_distance(self.bot.origin, trace.end_position)
-            # TODO: check if teleport trigger
-            if debug is True and self.drawn_directions - 32 < direction_num <= self.drawn_directions:
-                beam(RecipientFilter(), start=self.bot.origin, end=trace.end_position, parent=False, life_time=100,
-                     red=0, green=255, blue=0, alpha=255, speed=1, model_index=beam_model.index, start_width=0.4,
-                     end_width=0.4)
-        else:
-            if debug is True and self.drawn_directions - 32 < direction_num <= self.drawn_directions:
-                beam(RecipientFilter(), start=self.bot.origin, end=trace.end_position, parent=False, life_time=100,
-                     red=255, green=0, blue=0, alpha=255, speed=1, model_index=beam_model.index, start_width=0.4,
-                     end_width=0.4)
+
+        if debug is True and self.drawn_directions - 32 < direction_num <= self.drawn_directions:
+            color = [255, 0, 0]
+            end_position = destination
+            if trace.did_hit():
+                color = [0, 255, 0]
+                end_position = trace.end_position
+            beam(RecipientFilter(), start=self.bot.origin, end=end_position, parent=False, life_time=100,
+                 red=color[0], green=color[1], blue=color[2], alpha=255, speed=1, model_index=beam_model.index,
+                 start_width=0.4, end_width=0.4)
 
         return point
