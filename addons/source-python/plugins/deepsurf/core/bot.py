@@ -14,6 +14,7 @@ from engines.trace import ContentMasks
 from engines.trace import GameTrace
 from engines.trace import Ray
 from engines.trace import TraceFilterSimple
+from engines.trace import TraceType
 from entities.helpers import index_from_edict
 from filters.recipients import RecipientFilter
 from mathlib import Vector, NULL_VECTOR, QAngle, NULL_QANGLE
@@ -21,13 +22,14 @@ from players.bots import bot_manager, BotCmd
 from players.entity import Player
 
 # deepsurf
+from .helpers import CustomTraceFilter
 from .hud import draw_hud
 from .zone import Segment
 
 # =============================================================================
 # >> GLOBAL VARIABLES
 # =============================================================================
-debug = False
+debug = True
 beam_model = Model('sprites/laserbeam.vmt')
 point_directions = []
 # the actual number of directions will be
@@ -80,13 +82,14 @@ class Bot:
         self.training = False
         self.running = False
         self.drawn_directions = 32
+        self.time_limit = 10
         Bot.__instance = self
 
     def spawn(self):
         if self.bot is not None or self.controller is not None:
             return
 
-        bot_edict = bot_manager.create_bot("DeepSurf")
+        bot_edict = bot_manager.create_bot("Botty McBotface")
         if bot_edict is None:
             raise ValueError("Failed to create a bot")
 
@@ -218,9 +221,14 @@ class Bot:
         destination = self.bot.origin + direction * distance
         trace = GameTrace()
 
+        # TODO: this doesn't hit teleport triggers,
+        # need to use engine_trace.enumerate_entities
+        # https://github.com/Source-Python-Dev-Team/Source.Python/blob/master/src/core/modules/engines/engines_trace_wrap.cpp#L141
+        # https://github.com/VSES/SourceEngine2007/tree/master/src_main/public/engine/IEngineTrace.h#L161
+        # https://github.com/momentum-mod/game/blob/master/mp/src/game/server/momentum/mom_blockfix.cpp#L167
         engine_trace.trace_ray(
             Ray(self.bot.origin, destination),
-            ContentMasks.ALL,  # TODO: this doesn't hit teleport triggers
+            ContentMasks.ALL,
             # Ignore bot
             TraceFilterSimple((self.bot,)),
             trace
@@ -240,3 +248,6 @@ class Bot:
                  start_width=0.4, end_width=0.4)
 
         return point
+
+    def set_time_limit(self, value: int):
+        self.time_limit = value

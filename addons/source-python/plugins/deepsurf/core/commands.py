@@ -131,3 +131,10 @@ def _run_handler(command):
 @TypedClientCommand("dps_stop")
 def _run_handler(command):
     Bot.instance().stop()
+
+
+@TypedSayCommand("!timelimit")
+@TypedClientCommand("dps_timelimit")
+def _run_handler(command, value: int = 10):
+    Bot.instance().set_time_limit(value)
+    SayText2(f"[deepsurf] Time limit set to {value}").send(command.index)

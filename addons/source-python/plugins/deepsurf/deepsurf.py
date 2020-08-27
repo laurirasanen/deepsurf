@@ -7,7 +7,6 @@
 from engines.server import server, queue_command_string
 from events import Event
 from listeners import OnTick
-from players.entity import Player
 
 # deepsurf
 from .core.zone import Segment
