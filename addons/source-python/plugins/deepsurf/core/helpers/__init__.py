@@ -1,1 +1,1 @@
-from .trace import CustomTraceFilter
+from .trace import CustomEntEnum

@@ -10,11 +10,6 @@ import math
 from effects import beam
 from engines.precache import Model
 from engines.trace import engine_trace
-from engines.trace import ContentMasks
-from engines.trace import GameTrace
-from engines.trace import Ray
-from engines.trace import TraceFilterSimple
-from engines.trace import TraceType
 from entities.helpers import index_from_edict
 from filters.recipients import RecipientFilter
 from mathlib import Vector, NULL_VECTOR, QAngle, NULL_QANGLE
@@ -22,7 +17,7 @@ from players.bots import bot_manager, BotCmd
 from players.entity import Player
 
 # deepsurf
-from .helpers import CustomTraceFilter
+from .helpers import CustomEntEnum
 from .hud import draw_hud
 from .zone import Segment
 
@@ -219,30 +214,30 @@ class Bot:
         }
 
         destination = self.bot.origin + direction * distance
-        trace = GameTrace()
+        entity_enum = CustomEntEnum(self.bot.origin, destination, (self.bot,))
 
-        # TODO: this doesn't hit teleport triggers,
-        # need to use engine_trace.enumerate_entities
-        # https://github.com/Source-Python-Dev-Team/Source.Python/blob/master/src/core/modules/engines/engines_trace_wrap.cpp#L141
-        # https://github.com/VSES/SourceEngine2007/tree/master/src_main/public/engine/IEngineTrace.h#L161
-        # https://github.com/momentum-mod/game/blob/master/mp/src/game/server/momentum/mom_blockfix.cpp#L167
-        engine_trace.trace_ray(
-            Ray(self.bot.origin, destination),
-            ContentMasks.ALL,
-            # Ignore bot
-            TraceFilterSimple((self.bot,)),
-            trace
+        # Check for normal geometry
+        entity_enum.normal_trace()
+
+        # Check for trigger_teleports
+        engine_trace.enumerate_entities(
+            entity_enum.ray,
+            True,
+            entity_enum
         )
 
-        if trace.did_hit():
-            point["distance"] = Vector.get_distance(self.bot.origin, trace.end_position)
+        if entity_enum.did_hit:
+            point["distance"] = Vector.get_distance(self.bot.origin, entity_enum.point)
+            point["surface_type"] = entity_enum.surface_type
 
         if debug is True and self.drawn_directions - 32 < direction_num <= self.drawn_directions:
             color = [255, 0, 0]
             end_position = destination
-            if trace.did_hit():
+            if entity_enum.did_hit:
                 color = [0, 255, 0]
-                end_position = trace.end_position
+                end_position = entity_enum.point
+                if entity_enum.surface_type == 1:
+                    color = [0, 0, 255]
             beam(RecipientFilter(), start=self.bot.origin, end=end_position, parent=False, life_time=100,
                  red=color[0], green=color[1], blue=color[2], alpha=255, speed=1, model_index=beam_model.index,
                  start_width=0.4, end_width=0.4)
