@@ -107,6 +107,9 @@ class Bot:
             print("[deepsurf] No start zone")
             return
 
+        bcmd = self.get_cmd(0, 0)
+        self.controller.run_player_move(bcmd)
+
         self.bot.teleport(Segment.instance().start_zone.point, NULL_QANGLE, NULL_VECTOR)
         self.bot.set_view_angle(QAngle(0, Segment.instance().start_zone.orientation, 0))
 
