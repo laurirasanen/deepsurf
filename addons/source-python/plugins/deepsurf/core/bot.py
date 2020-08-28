@@ -170,8 +170,13 @@ class Bot:
                                       self.bot.origin)
         reward = current_fitness - previous_fitness
         self.total_reward += reward
+
+        time = server.time - self.start_time
+        if self.training is True:
+            time = self.time_limit - time
+
         # TODO: return reward to NN if training
-        draw_hud(self.bot, self.training, self.total_reward)
+        draw_hud(self.bot, time, self.training, self.total_reward)
 
     def get_cmd(self, move_action=0, aim_action=0):
         """Get BotCmd for move direction and aim delta"""
@@ -273,6 +278,9 @@ class Bot:
 
     def set_time_limit(self, value: float):
         self.time_limit = value
+
+    def get_time_limit(self):
+        return self.time_limit
 
     def get_origin(self):
         if self.bot is not None:

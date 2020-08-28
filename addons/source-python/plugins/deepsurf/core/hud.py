@@ -15,16 +15,16 @@ buffer_white_space = "\n\n\n\n\n\n"
 # =============================================================================
 # >> FUNCTIONS
 # =============================================================================
-def draw_hud(bot, training, reward):
+def draw_hud(bot, time, training, reward):
     """Draw hud to players."""
-    _draw_timer(bot.spectators, training, reward)
+    _draw_timer(bot.spectators, time, training, reward)
 
 
-def _draw_timer(spectators, training, reward):
+def _draw_timer(spectators, time, training, reward):
     """Draw timer for bot."""
 
     # lines for timer hud
-    time_line = "00:00:00"
+    time_line = f"{round(time, 2)}"
     reward_line = f"Total reward: {round(reward, 2)}"
 
     # combine lines
