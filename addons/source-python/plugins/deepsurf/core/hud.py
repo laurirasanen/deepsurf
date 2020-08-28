@@ -15,38 +15,26 @@ buffer_white_space = "\n\n\n\n\n\n"
 # =============================================================================
 # >> FUNCTIONS
 # =============================================================================
-def draw_hud(bot):
+def draw_hud(bot, training, reward):
     """Draw hud to players."""
-    _draw_timer(bot.spectators)
+    _draw_timer(bot.spectators, training, reward)
 
 
-def _draw_timer(spectators):
+def _draw_timer(spectators, training, reward):
     """Draw timer for bot."""
 
     # lines for timer hud
     time_line = "00:00:00"
-    zone_line = "[Map Start]"
-    mode_line = "Training"
-    cp_line = "(cp0: 00:00:00)"
+    reward_line = f"Reward: {round(reward, 2)}"
 
     # combine lines
-    combined = ""
+    combined = time_line + "\n"
 
-    if time_line:
-        combined += time_line
-
-    if cp_line:
-        combined += "\n" + cp_line + "\n"
+    if training is True:
+        combined += "Training\n"
+        combined += reward_line
     else:
-        # NOTE:
-        # HintText needs something on "empty" lines or it freaks out,
-        # use space between multiple newlines
-        combined += "\n \n"
-
-    if zone_line:
-        combined += f"{zone_line}\n \n"
-
-    combined += mode_line
+        combined += "Running"
 
     hint_text = HintText(combined)
 

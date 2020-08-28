@@ -156,13 +156,20 @@ class Bot:
             self.end_run()
             return
 
+        previous_fitness = get_fitness(Segment.instance().start_zone.point, Segment.instance().end_zone.point,
+                                       self.bot.origin)
+
         point_cloud = self.get_point_cloud()
         velocity = self.bot.get_property_vector("m_vecVelocity")
         (move_action, aim_action) = self.get_action(point_cloud, velocity)
         bcmd = self.get_cmd(move_action, aim_action)
         self.controller.run_player_move(bcmd)
 
-        draw_hud(self.bot)
+        current_fitness = get_fitness(Segment.instance().start_zone.point, Segment.instance().end_zone.point,
+                                      self.bot.origin)
+        reward = current_fitness - previous_fitness
+        # TODO: return reward to NN if training
+        draw_hud(self.bot, self.training, reward)
 
     def get_cmd(self, move_action=0, aim_action=0):
         """Get BotCmd for move direction and aim delta"""
@@ -197,7 +204,7 @@ class Bot:
 
     def get_action(self, point_cloud, velocity):
         # TODO: get action from NN here
-        move_action = 0
+        move_action = 1
         aim_action = 0
         return (move_action, aim_action)
 
