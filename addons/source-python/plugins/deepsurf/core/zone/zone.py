@@ -21,6 +21,8 @@ model = Model("sprites/laser.vmt")
 # =============================================================================
 class Zone:
     """Class for Segment Zones."""
+    orientation = 0
+    point = NULL_VECTOR
 
     def __init__(self, point=NULL_VECTOR, orientation=0):
         """Create a new Zone."""

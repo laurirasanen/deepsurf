@@ -10,6 +10,7 @@ import math
 from effects import beam
 from engines.precache import Model
 from engines.trace import engine_trace
+from engines.server import server
 from entities.helpers import index_from_edict
 from filters.recipients import RecipientFilter
 from mathlib import Vector, NULL_VECTOR, QAngle, NULL_QANGLE
@@ -18,6 +19,7 @@ from players.entity import Player
 
 # deepsurf
 from .helpers import CustomEntEnum
+from .helpers import get_fitness
 from .hud import draw_hud
 from .zone import Segment
 
@@ -77,7 +79,8 @@ class Bot:
         self.training = False
         self.running = False
         self.drawn_directions = 32
-        self.time_limit = 10
+        self.time_limit = 10.0
+        self.start_time = 0.0
         Bot.__instance = self
 
     def spawn(self):
@@ -123,22 +126,34 @@ class Bot:
         self.running = False
         self.training = True
         self.reset()
+        self.start_time = server.time
 
     def run(self):
         self.training = False
         self.running = True
         self.reset()
+        self.start_time = server.time
 
     def stop(self):
         self.training = False
         self.running = False
         self.reset()
 
+    def end_run(self):
+        fitness = get_fitness(Segment.instance().start_zone.point, Segment.instance().end_zone.point, self.bot.origin)
+        print(f"run end, fitness: {fitness}")
+        self.reset()
+        self.start_time = server.time
+
     def tick(self):
         if self.bot is None or self.controller is None:
             return
 
         if self.training is False and self.running is False:
+            return
+
+        if server.time > self.start_time + self.time_limit:
+            self.end_run()
             return
 
         point_cloud = self.get_point_cloud()
@@ -247,5 +262,10 @@ class Bot:
 
         return point
 
-    def set_time_limit(self, value: int):
+    def set_time_limit(self, value: float):
         self.time_limit = value
+
+    def get_origin(self):
+        if self.bot is not None:
+            return self.bot.origin
+        return NULL_VECTOR

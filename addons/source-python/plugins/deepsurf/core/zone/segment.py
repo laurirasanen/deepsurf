@@ -18,6 +18,8 @@ class Segment:
     """Collection of zones for maps, stages, etc."""
 
     __instance = None
+    start_zone = None
+    end_zone = None
 
     @staticmethod
     def instance():
