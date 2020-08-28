@@ -25,7 +25,7 @@ def _draw_timer(spectators, training, reward):
 
     # lines for timer hud
     time_line = "00:00:00"
-    reward_line = f"Reward: {round(reward, 2)}"
+    reward_line = f"Total reward: {round(reward, 2)}"
 
     # combine lines
     combined = time_line + "\n"

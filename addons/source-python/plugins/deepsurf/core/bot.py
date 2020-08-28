@@ -81,6 +81,7 @@ class Bot:
         self.drawn_directions = 32
         self.time_limit = 10.0
         self.start_time = 0.0
+        self.total_reward = 0.0
         Bot.__instance = self
 
     def spawn(self):
@@ -112,7 +113,7 @@ class Bot:
 
         bcmd = self.get_cmd(0, 0)
         self.controller.run_player_move(bcmd)
-
+        self.total_reward = 0.0
         self.bot.teleport(Segment.instance().start_zone.point, NULL_QANGLE, NULL_VECTOR)
         self.bot.set_view_angle(QAngle(0, Segment.instance().start_zone.orientation, 0))
 
@@ -168,8 +169,9 @@ class Bot:
         current_fitness = get_fitness(Segment.instance().start_zone.point, Segment.instance().end_zone.point,
                                       self.bot.origin)
         reward = current_fitness - previous_fitness
+        self.total_reward += reward
         # TODO: return reward to NN if training
-        draw_hud(self.bot, self.training, reward)
+        draw_hud(self.bot, self.training, self.total_reward)
 
     def get_cmd(self, move_action=0, aim_action=0):
         """Get BotCmd for move direction and aim delta"""
