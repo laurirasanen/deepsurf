@@ -22,6 +22,7 @@ from .helpers import CustomEntEnum
 from .helpers import get_fitness
 from .hud import draw_hud
 from .zone import Segment
+from .network import Network
 
 # =============================================================================
 # >> GLOBAL VARIABLES
@@ -143,6 +144,10 @@ class Bot:
     def end_run(self):
         fitness = get_fitness(Segment.instance().start_zone.point, Segment.instance().end_zone.point, self.bot.origin)
         print(f"run end, fitness: {fitness}")
+
+        if self.training:
+            Network.instance().end_episode(fitness)
+
         self.reset()
         self.start_time = server.time
 
@@ -150,19 +155,15 @@ class Bot:
         if self.bot is None or self.controller is None:
             return
 
-        if self.training is False and self.running is False:
-            return
+        if self.training:
+            self.train()
 
-        if server.time > self.start_time + self.time_limit:
-            self.end_run()
-            return
-
+    def train(self):
         previous_fitness = get_fitness(Segment.instance().start_zone.point, Segment.instance().end_zone.point,
                                        self.bot.origin)
 
-        point_cloud = self.get_point_cloud()
-        velocity = self.bot.get_property_vector("m_vecVelocity")
-        (move_action, aim_action) = self.get_action(point_cloud, velocity)
+        state = self.get_state()
+        (move_action, aim_action) = self.get_action(state)
         bcmd = self.get_cmd(move_action, aim_action)
         self.controller.run_player_move(bcmd)
 
@@ -171,12 +172,19 @@ class Bot:
         reward = current_fitness - previous_fitness
         self.total_reward += reward
 
-        time = server.time - self.start_time
-        if self.training is True:
-            time = self.time_limit - time
-
-        # TODO: return reward to NN if training
+        time = self.time_limit - (server.time - self.start_time)
         draw_hud(self.bot, time, self.training, self.total_reward)
+
+        # TODO: should also be done if reached end?
+        done = False
+        if server.time > self.start_time + self.time_limit:
+            done = True
+
+        state_next = self.get_state()
+        Network.instance().post_action(reward, state_next, done)
+
+        if done:
+            self.end_run()
 
     def get_cmd(self, move_action=0, aim_action=0):
         """Get BotCmd for move direction and aim delta"""
@@ -209,11 +217,21 @@ class Bot:
 
         return bcmd
 
-    def get_action(self, point_cloud, velocity):
-        # TODO: get action from NN here
-        move_action = 1
-        aim_action = 0
-        return (move_action, aim_action)
+    def get_action(self, state):
+        return Network.instance().get_action(state)
+
+    def get_state(self):
+        point_cloud = self.get_point_cloud()
+        velocity = self.bot.get_property_vector("m_vecVelocity")
+        state_distances = []
+        state_surfaces = []
+        state_velocity = [velocity.x, velocity.y, velocity.z]
+        for point in point_cloud:
+            state_distances.append(point["distance"])
+            state_surfaces.append(point["surface_type"])
+
+        state = (state_distances, state_surfaces, state_velocity)
+        return state
 
     def get_point_cloud(self):
         points = []
