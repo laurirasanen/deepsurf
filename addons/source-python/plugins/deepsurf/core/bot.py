@@ -5,6 +5,7 @@
 # =============================================================================
 # Python
 import math
+import rpyc
 
 # Source.Python
 from effects import beam
@@ -22,7 +23,6 @@ from .helpers import CustomEntEnum
 from .helpers import get_fitness
 from .hud import draw_hud
 from .zone import Segment
-from .network import Network
 
 # =============================================================================
 # >> GLOBAL VARIABLES
@@ -62,6 +62,8 @@ class Bot:
     """A controllable bot class"""
 
     __instance = None
+    conn = None
+    network = None
 
     @staticmethod
     def instance():
@@ -83,6 +85,8 @@ class Bot:
         self.time_limit = 10.0
         self.start_time = 0.0
         self.total_reward = 0.0
+        self.conn = rpyc.connect("localhost", 18811)
+        self.network = self.conn.root.Network()
         Bot.__instance = self
 
     def spawn(self):
@@ -146,7 +150,7 @@ class Bot:
         print(f"run end, fitness: {fitness}")
 
         if self.training:
-            Network.instance().end_episode(fitness)
+            self.network.end_episode(fitness)
 
         self.reset()
         self.start_time = server.time
@@ -156,9 +160,9 @@ class Bot:
             return
 
         if self.training:
-            self.train()
+            self.train_tick()
 
-    def train(self):
+    def train_tick(self):
         previous_fitness = get_fitness(Segment.instance().start_zone.point, Segment.instance().end_zone.point,
                                        self.bot.origin)
 
@@ -181,7 +185,7 @@ class Bot:
             done = True
 
         state_next = self.get_state()
-        Network.instance().post_action(reward, state_next, done)
+        self.network.post_action(reward, state_next, done)
 
         if done:
             self.end_run()
@@ -194,7 +198,11 @@ class Bot:
         view_angles = self.bot.view_angle
 
         if aim_action != 0:
-            view_angles.y -= aim_action
+            aim_options = {
+                1: -2.5,
+                2: 2.5
+            }
+            view_angles.y -= aim_options[aim_action]
 
         bcmd.view_angles = view_angles
 
@@ -218,7 +226,9 @@ class Bot:
         return bcmd
 
     def get_action(self, state):
-        return Network.instance().get_action(state)
+        action = self.network.get_action(state)
+        print(f"got action: {action}")
+        return action
 
     def get_state(self):
         point_cloud = self.get_point_cloud()
@@ -228,7 +238,7 @@ class Bot:
         state_velocity = [velocity.x, velocity.y, velocity.z]
         for point in point_cloud:
             state_distances.append(point["distance"])
-            state_surfaces.append(point["surface_type"])
+            state_surfaces.append(point["is_teleport"])
 
         state = (state_distances, state_surfaces, state_velocity)
         return state
@@ -260,7 +270,7 @@ class Bot:
     def get_single_point(self, direction: Vector, distance: float, direction_num):
         point = {
             "distance": distance,
-            "surface_type": 0
+            "is_teleport": False
         }
 
         destination = self.bot.origin + direction * distance
@@ -278,7 +288,7 @@ class Bot:
 
         if entity_enum.did_hit:
             point["distance"] = Vector.get_distance(self.bot.origin, entity_enum.point)
-            point["surface_type"] = entity_enum.surface_type
+            point["is_teleport"] = entity_enum.is_teleport
 
         if debug is True and self.drawn_directions - 32 < direction_num <= self.drawn_directions:
             color = [255, 0, 0]
@@ -286,7 +296,7 @@ class Bot:
             if entity_enum.did_hit:
                 color = [0, 255, 0]
                 end_position = entity_enum.point
-                if entity_enum.surface_type == 1:
+                if entity_enum.is_teleport is True:
                     color = [0, 0, 255]
             beam(RecipientFilter(), start=self.bot.origin, end=end_position, parent=False, life_time=100,
                  red=color[0], green=color[1], blue=color[2], alpha=255, speed=1, model_index=beam_model.index,

@@ -20,7 +20,7 @@ from engines.trace import ContentMasks
 # =============================================================================
 class CustomEntEnum(EntityEnumerator):
     did_hit = False
-    surface_type = 0
+    is_teleport = 0
     point = NULL_VECTOR
     ray = None
     filter = ()
@@ -51,7 +51,7 @@ class CustomEntEnum(EntityEnumerator):
                 self.distance = distance
                 self.point = trace.end_position
                 self.did_hit = True
-                self.surface_type = 1
+                self.is_teleport = True
                 self.entity = entity
 
         return True
@@ -68,7 +68,7 @@ class CustomEntEnum(EntityEnumerator):
 
         if trace.did_hit():
             self.did_hit = True
-            self.surface_type = 0
+            self.is_teleport = False
             self.point = trace.end_position
             self.entity = trace.entity
             self.distance = Vector.get_distance(self.origin, trace.end_position)
