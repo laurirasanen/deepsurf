@@ -27,7 +27,7 @@ from .zone import Segment
 # =============================================================================
 # >> GLOBAL VARIABLES
 # =============================================================================
-debug = True
+debug = False
 beam_model = Model('sprites/laserbeam.vmt')
 point_directions = []
 # the actual number of directions will be
@@ -64,6 +64,7 @@ class Bot:
     __instance = None
     conn = None
     network = None
+    state = None
 
     @staticmethod
     def instance():
@@ -121,6 +122,7 @@ class Bot:
         self.total_reward = 0.0
         self.bot.teleport(Segment.instance().start_zone.point, NULL_QANGLE, NULL_VECTOR)
         self.bot.set_view_angle(QAngle(0, Segment.instance().start_zone.orientation, 0))
+        self.state = None
 
     def kick(self, reason):
         if self.bot is not None:
@@ -166,8 +168,12 @@ class Bot:
         previous_fitness = get_fitness(Segment.instance().start_zone.point, Segment.instance().end_zone.point,
                                        self.bot.origin)
 
-        state = self.get_state()
-        (move_action, aim_action) = self.get_action(state)
+        # only calculate new state on first training tick,
+        # use updated state from end of tick otherwise for optimization
+        if self.state is None:
+            self.state = self.get_state()
+
+        (move_action, aim_action) = self.get_action(self.state)
         bcmd = self.get_cmd(move_action, aim_action)
         self.controller.run_player_move(bcmd)
 
@@ -176,16 +182,16 @@ class Bot:
         reward = current_fitness - previous_fitness
         self.total_reward += reward
 
-        time = self.time_limit - (server.time - self.start_time)
-        draw_hud(self.bot, time, self.training, self.total_reward)
+        time_elapsed = self.time_limit - (server.time - self.start_time)
+        draw_hud(self.bot, time_elapsed, self.training, self.total_reward)
 
         # TODO: should also be done if reached end?
         done = False
         if server.time > self.start_time + self.time_limit:
             done = True
 
-        state_next = self.get_state()
-        self.network.post_action(reward, state_next, done)
+        self.state = self.get_state()
+        self.network.post_action(reward, self.state, done)
 
         if done:
             self.end_run()
@@ -198,11 +204,7 @@ class Bot:
         view_angles = self.bot.view_angle
 
         if aim_action != 0:
-            aim_options = {
-                1: -2.5,
-                2: 2.5
-            }
-            view_angles.y -= aim_options[aim_action]
+            view_angles.y += aim_action
 
         bcmd.view_angles = view_angles
 
@@ -227,7 +229,6 @@ class Bot:
 
     def get_action(self, state):
         action = self.network.get_action(state)
-        print(f"got action: {action}")
         return action
 
     def get_state(self):
