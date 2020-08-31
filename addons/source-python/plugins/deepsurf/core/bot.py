@@ -65,6 +65,7 @@ class Bot:
     conn = None
     network = None
     state = None
+    fitness = 0.0
 
     @staticmethod
     def instance():
@@ -123,6 +124,7 @@ class Bot:
         self.bot.teleport(Segment.instance().start_zone.point, NULL_QANGLE, NULL_VECTOR)
         self.bot.set_view_angle(QAngle(0, Segment.instance().start_zone.orientation, 0))
         self.state = None
+        self.fitness = 0.0
 
     def kick(self, reason):
         if self.bot is not None:
@@ -148,8 +150,12 @@ class Bot:
         self.reset()
 
     def end_run(self):
-        fitness = get_fitness(Segment.instance().start_zone.point, Segment.instance().end_zone.point, self.bot.origin)
-        print(f"run end, fitness: {fitness}")
+        fitness, done = get_fitness(
+            Segment.instance().start_zone.point,
+            Segment.instance().end_zone.point,
+            self.bot.origin
+        )
+        print(f"run end, fitness: {fitness}, done: {done}")
 
         if self.training:
             self.network.end_episode(fitness)
@@ -165,34 +171,38 @@ class Bot:
             self.train_tick()
 
     def train_tick(self):
-        previous_fitness = get_fitness(Segment.instance().start_zone.point, Segment.instance().end_zone.point,
-                                       self.bot.origin)
-
-        # only calculate new state on first training tick,
-        # use updated state from end of tick otherwise for optimization
+        # use values from previous tick for optimization
         if self.state is None:
             self.state = self.get_state()
+            previous_fitness, prev_done = get_fitness(
+                Segment.instance().start_zone.point,
+                Segment.instance().end_zone.point,
+                self.bot.origin
+            )
+        else:
+            previous_fitness = self.fitness
 
         (move_action, aim_action) = self.get_action(self.state)
         bcmd = self.get_cmd(move_action, aim_action)
         self.controller.run_player_move(bcmd)
 
-        current_fitness = get_fitness(Segment.instance().start_zone.point, Segment.instance().end_zone.point,
-                                      self.bot.origin)
-        reward = current_fitness - previous_fitness
+        self.fitness, done = get_fitness(
+            Segment.instance().start_zone.point,
+            Segment.instance().end_zone.point,
+            self.bot.origin
+        )
+        reward = self.fitness - previous_fitness
         self.total_reward += reward
 
         time_elapsed = self.time_limit - (server.time - self.start_time)
-        draw_hud(self.bot, time_elapsed, self.training, self.total_reward)
+        if server.tick % 67 == 0:
+            draw_hud(self.bot, time_elapsed, self.training, self.total_reward)
 
-        # TODO: should also be done if reached end?
-        done = False
         if server.time > self.start_time + self.time_limit:
             done = True
 
         self.state = self.get_state()
         self.network.post_action(reward, self.state, done)
-
         if done:
             self.end_run()
 
@@ -248,17 +258,16 @@ class Bot:
         points = []
 
         # Transform to local space of bot
-        directions = point_directions.copy()
-        orientation = self.bot.view_angle.y
-        for direction in directions:
-            x = direction.x * math.cos(orientation) - direction.y * math.sin(orientation)
-            y = direction.x * math.sin(orientation) + direction.y * math.cos(orientation)
-            direction.x = x
-            direction.y = y
-
+        cos = math.cos(self.bot.view_angle.y)
+        sin = math.cos(self.bot.view_angle.y)
         direction_num = 1
-        for direction in directions:
-            point = self.get_single_point(Vector.normalized(direction), 10000.0, direction_num)
+
+        for direction in point_directions:
+            local_dir = Vector(
+                direction.x * cos - direction.y * sin,
+                direction.x * sin + direction.y * cos
+            )
+            point = self.get_single_point(Vector.normalized(local_dir), 10000.0, direction_num)
             direction_num += 1
             points.append(point)
 
