@@ -28,7 +28,7 @@ from .zone import Segment
 # >> GLOBAL VARIABLES
 # =============================================================================
 debug = False
-beam_model = Model('sprites/laserbeam.vmt')
+beam_model = Model("sprites/laserbeam.vmt")
 point_directions = []
 # the actual number of directions will be
 # x - sqrt(x) + 2, e.g. 100 -> 92
@@ -79,6 +79,7 @@ class Bot:
         if Bot.__instance is not None:
             raise Exception("This class is a singleton, use .instance() access method.")
 
+        self.spawned = False
         self.bot = None
         self.controller = None
         self.training = False
@@ -104,11 +105,15 @@ class Bot:
             raise ValueError("Failed to get bot controller")
 
         self.bot = Player(index_from_edict(bot_edict))
-        self.bot.set_noblock(True)
         self.bot.team = 2
         self.bot.set_property_uchar("m_PlayerClass.m_iClass", 7)
         self.bot.set_property_uchar("m_Shared.m_iDesiredPlayerClass", 7)
         self.bot.spawn(force=True)
+
+    def on_spawn(self):
+        self.spawned = True
+        # these need to be set after spawning
+        self.bot.set_noblock(True)
 
     def reset(self):
         if self.bot is None:
@@ -118,10 +123,16 @@ class Bot:
             print("[deepsurf] No start zone")
             return
 
+        self.total_reward = 0.0
         bcmd = self.get_cmd(0, 0)
         self.controller.run_player_move(bcmd)
-        self.total_reward = 0.0
-        self.bot.teleport(Segment.instance().start_zone.point, NULL_QANGLE, NULL_VECTOR)
+        # FIXME
+        # bot does not teleport and will stop moving with bcmds after this is called!
+        self.bot.teleport(
+            Segment.instance().start_zone.point,
+            QAngle(0, Segment.instance().start_zone.orientation, 0),
+            NULL_VECTOR,
+        )
         self.bot.set_view_angle(QAngle(0, Segment.instance().start_zone.orientation, 0))
         self.state = None
         self.fitness = 0.0
@@ -153,7 +164,7 @@ class Bot:
         fitness, done = get_fitness(
             Segment.instance().start_zone.point,
             Segment.instance().end_zone.point,
-            self.bot.origin
+            self.bot.origin,
         )
         print(f"run end, fitness: {fitness}, done: {done}")
 
@@ -167,8 +178,13 @@ class Bot:
         if self.bot is None or self.controller is None:
             return
 
+        if not self.spawned:
+            return
+
         if self.training:
             self.train_tick()
+        elif self.running:
+            self.run_tick()
 
     def train_tick(self):
         # use values from previous tick for optimization
@@ -177,7 +193,7 @@ class Bot:
             previous_fitness, prev_done = get_fitness(
                 Segment.instance().start_zone.point,
                 Segment.instance().end_zone.point,
-                self.bot.origin
+                self.bot.origin,
             )
         else:
             previous_fitness = self.fitness
@@ -189,7 +205,7 @@ class Bot:
         self.fitness, done = get_fitness(
             Segment.instance().start_zone.point,
             Segment.instance().end_zone.point,
-            self.bot.origin
+            self.bot.origin,
         )
         reward = self.fitness - previous_fitness
         self.total_reward += reward
@@ -203,6 +219,28 @@ class Bot:
 
         self.state = self.get_state()
         self.network.post_action(reward, self.state, done)
+        if done:
+            self.end_run()
+
+    def run_tick(self):
+        self.state = self.get_state()
+        (move_action, aim_action) = self.get_action(self.state)
+        bcmd = self.get_cmd(move_action, aim_action)
+        self.controller.run_player_move(bcmd)
+
+        time_elapsed = self.time_limit - (server.time - self.start_time)
+        if server.tick % 67 == 0:
+            draw_hud(self.bot, time_elapsed, self.training, 0)
+
+        _, done = get_fitness(
+            Segment.instance().start_zone.point,
+            Segment.instance().end_zone.point,
+            self.bot.origin,
+        )
+
+        if server.time > self.start_time + self.time_limit:
+            done = True
+
         if done:
             self.end_run()
 
@@ -244,14 +282,13 @@ class Bot:
     def get_state(self):
         point_cloud = self.get_point_cloud()
         velocity = self.bot.get_property_vector("m_vecVelocity")
-        state_distances = []
-        state_surfaces = []
-        state_velocity = [velocity.x, velocity.y, velocity.z]
+        state = []
         for point in point_cloud:
-            state_distances.append(point["distance"])
-            state_surfaces.append(point["is_teleport"])
+            state.append(point["distance"])
+        for point in point_cloud:
+            state.append(1.0 if point["is_teleport"] else 0.0)
+        state.extend([velocity.x, velocity.y, velocity.z])
 
-        state = (state_distances, state_surfaces, state_velocity)
         return state
 
     def get_point_cloud(self):
@@ -265,9 +302,11 @@ class Bot:
         for direction in point_directions:
             local_dir = Vector(
                 direction.x * cos - direction.y * sin,
-                direction.x * sin + direction.y * cos
+                direction.x * sin + direction.y * cos,
             )
-            point = self.get_single_point(Vector.normalized(local_dir), 10000.0, direction_num)
+            point = self.get_single_point(
+                Vector.normalized(local_dir), 10000.0, direction_num
+            )
             direction_num += 1
             points.append(point)
 
@@ -278,10 +317,7 @@ class Bot:
         return points
 
     def get_single_point(self, direction: Vector, distance: float, direction_num):
-        point = {
-            "distance": distance,
-            "is_teleport": False
-        }
+        point = {"distance": distance, "is_teleport": False}
 
         destination = self.bot.origin + direction * distance
         entity_enum = CustomEntEnum(self.bot.origin, destination, (self.bot,))
@@ -290,17 +326,16 @@ class Bot:
         entity_enum.normal_trace()
 
         # Check for trigger_teleports
-        engine_trace.enumerate_entities(
-            entity_enum.ray,
-            True,
-            entity_enum
-        )
+        engine_trace.enumerate_entities(entity_enum.ray, True, entity_enum)
 
         if entity_enum.did_hit:
             point["distance"] = Vector.get_distance(self.bot.origin, entity_enum.point)
             point["is_teleport"] = entity_enum.is_teleport
 
-        if debug is True and self.drawn_directions - 32 < direction_num <= self.drawn_directions:
+        if (
+            debug is True
+            and self.drawn_directions - 32 < direction_num <= self.drawn_directions
+        ):
             color = [255, 0, 0]
             end_position = destination
             if entity_enum.did_hit:
@@ -308,9 +343,21 @@ class Bot:
                 end_position = entity_enum.point
                 if entity_enum.is_teleport is True:
                     color = [0, 0, 255]
-            beam(RecipientFilter(), start=self.bot.origin, end=end_position, parent=False, life_time=100,
-                 red=color[0], green=color[1], blue=color[2], alpha=255, speed=1, model_index=beam_model.index,
-                 start_width=0.4, end_width=0.4)
+            beam(
+                RecipientFilter(),
+                start=self.bot.origin,
+                end=end_position,
+                parent=False,
+                life_time=100,
+                red=color[0],
+                green=color[1],
+                blue=color[2],
+                alpha=255,
+                speed=1,
+                model_index=beam_model.index,
+                start_width=0.4,
+                end_width=0.4,
+            )
 
         return point
 
