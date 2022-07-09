@@ -17,6 +17,7 @@ from filters.recipients import RecipientFilter
 from mathlib import Vector, NULL_VECTOR, QAngle, NULL_QANGLE
 from players.bots import bot_manager, BotCmd
 from players.entity import Player
+from players.constants import PlayerButtons
 
 # deepsurf
 from .helpers import CustomEntEnum
@@ -114,6 +115,7 @@ class Bot:
         self.spawned = True
         # these need to be set after spawning
         self.bot.set_noblock(True)
+        self.reset()
 
     def reset(self):
         if self.bot is None:
@@ -124,16 +126,12 @@ class Bot:
             return
 
         self.total_reward = 0.0
-        bcmd = self.get_cmd(0, 0)
+        bcmd = self.get_cmd(0, 0, 0, 0)
         self.controller.run_player_move(bcmd)
-        # FIXME
-        # bot does not teleport and will stop moving with bcmds after this is called!
-        self.bot.teleport(
+        self.bot.snap_to_position(
             Segment.instance().start_zone.point,
             QAngle(0, Segment.instance().start_zone.orientation, 0),
-            NULL_VECTOR,
         )
-        self.bot.set_view_angle(QAngle(0, Segment.instance().start_zone.orientation, 0))
         self.state = None
         self.fitness = 0.0
 
@@ -198,8 +196,8 @@ class Bot:
         else:
             previous_fitness = self.fitness
 
-        (move_action, aim_action) = self.get_action(self.state)
-        bcmd = self.get_cmd(move_action, aim_action)
+        (move_action, aim_action, jump_action, duck_action) = self.get_action(self.state)
+        bcmd = self.get_cmd(move_action, aim_action, jump_action, duck_action)
         self.controller.run_player_move(bcmd)
 
         self.fitness, done = get_fitness(
@@ -224,8 +222,8 @@ class Bot:
 
     def run_tick(self):
         self.state = self.get_state()
-        (move_action, aim_action) = self.get_action(self.state)
-        bcmd = self.get_cmd(move_action, aim_action)
+        (move_action, aim_action, jump_action, duck_action) = self.get_action(self.state)
+        bcmd = self.get_cmd(move_action, aim_action, jump_action, duck_action)
         self.controller.run_player_move(bcmd)
 
         time_elapsed = self.time_limit - (server.time - self.start_time)
@@ -244,7 +242,7 @@ class Bot:
         if done:
             self.end_run()
 
-    def get_cmd(self, move_action=0, aim_action=0):
+    def get_cmd(self, move_action=0, aim_action=0, jump_action=0, duck_action=0):
         """Get BotCmd for move direction and aim delta"""
 
         bcmd = BotCmd()
@@ -272,6 +270,12 @@ class Bot:
             move = move_options[move_action]
             bcmd.forward_move = move["forward_move"]
             bcmd.side_move = move["side_move"]
+
+        if jump_action != 0:
+            bcmd.buttons |= PlayerButtons.JUMP
+
+        if duck_action != 0:
+            bcmd.buttons |= PlayerButtons.DUCK
 
         return bcmd
 
