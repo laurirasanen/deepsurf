@@ -5,7 +5,10 @@
 # =============================================================================
 # Python
 import math
+import pickle
 import rpyc
+
+rpyc.core.protocol.DEFAULT_CONFIG["allow_pickle"] = True
 
 # Source.Python
 from effects import beam
@@ -216,7 +219,7 @@ class Bot:
             done = True
 
         self.state = self.get_state()
-        self.network.post_action(reward, self.state, done)
+        self.network.post_action(reward, pickle.dumps(self.state), done)
         if done:
             self.end_run()
 
@@ -280,7 +283,7 @@ class Bot:
         return bcmd
 
     def get_action(self, state):
-        action = self.network.get_action(state)
+        action = self.network.get_action(pickle.dumps(state))
         return action
 
     def get_state(self):
