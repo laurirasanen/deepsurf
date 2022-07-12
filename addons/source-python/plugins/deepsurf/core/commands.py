@@ -8,7 +8,7 @@ import json
 import pathlib
 
 # Source.Python
-from commands.typed import TypedSayCommand, TypedClientCommand
+from commands.typed import TypedSayCommand, TypedClientCommand, TypedServerCommand
 from engines.server import server
 from mathlib import Vector
 from messages import SayText2
@@ -17,6 +17,14 @@ from players.entity import Player
 # deepsurf
 from .zone import Segment, Zone
 from .bot import Bot
+
+
+# Helper for responding to commands
+def respond(text, index):
+    if index is None or index <= 0:
+        print(text)
+    else:
+        SayText2(text).send(index)
 
 
 # =============================================================================
@@ -29,8 +37,10 @@ def _setstart_handler(command):
     origin = player.get_property_vector("m_vecOrigin")
     orientation = int(round(player.get_view_angle().y))
     # Create new vector to avoid reference
-    Segment.instance().set_start_zone(Zone(Vector(origin.x, origin.y, origin.z), orientation))
-    SayText2(f"[deepsurf] Set start at ({origin})").send(command.index)
+    Segment.instance().set_start_zone(
+        Zone(Vector(origin.x, origin.y, origin.z), orientation)
+    )
+    respond(f"[deepsurf] Set start at ({origin})", command.index)
 
 
 @TypedSayCommand("!setend")
@@ -39,7 +49,7 @@ def _setend_handler(command):
     player = Player(command.index)
     origin = player.get_property_vector("m_vecOrigin")
     Segment.instance().set_end_zone(Zone(Vector(origin.x, origin.y, origin.z)))
-    SayText2(f"[deepsurf] Set end at ({origin})").send(command.index)
+    respond(f"[deepsurf] Set end at ({origin})", command.index)
 
 
 @TypedSayCommand("!addcp")
@@ -47,33 +57,38 @@ def _setend_handler(command):
 def _addcp_handler(command):
     player = Player(command.index)
     origin = player.get_property_vector("m_vecOrigin")
-    index = Segment.instance().add_checkpoint(Zone(Vector(origin.x, origin.y, origin.z)))
-    SayText2(f"[deepsurf] Added checkpoint {index} at ({origin})").send(command.index)
+    index = Segment.instance().add_checkpoint(
+        Zone(Vector(origin.x, origin.y, origin.z))
+    )
+    respond(f"[deepsurf] Added checkpoint {index} at ({origin})", command.index)
 
 
 @TypedSayCommand("!removecp")
 @TypedClientCommand("dps_removecp")
+@TypedServerCommand("dps_removecp")
 def _removecp_handler(command):
     index = Segment.instance().remove_checkpoint()
     if index > 0:
-        SayText2(f"[deepsurf] Removed checkpoint {index}").send(command.index)
+        respond(f"[deepsurf] Removed checkpoint {index}", command.index)
     else:
-        SayText2(f"[deepsurf] No checkpoints to remove").send(command.index)
+        respond(f"[deepsurf] No checkpoints to remove", command.index)
 
 
 @TypedSayCommand("!clear")
 @TypedClientCommand("dps_clear")
+@TypedServerCommand("dps_clear")
 def _clear_handler(command):
     Segment.instance().clear()
-    SayText2(f"[deepsurf] Cleared segment").send(command.index)
+    respond(f"[deepsurf] Cleared segment", command.index)
 
 
 @TypedSayCommand("!savecfg")
 @TypedClientCommand("dps_savecfg")
+@TypedServerCommand("dps_savecfg")
 def _savecfg_handler(command, index: int = 0):
     data = Segment.instance().serialize()
     if data is None:
-        SayText2(f"[deepsurf] Could not serialize segment").send(command.index)
+        respond(f"[deepsurf] Could not serialize segment", command.index)
         return
 
     # Relative to tf2 folder
@@ -84,34 +99,33 @@ def _savecfg_handler(command, index: int = 0):
     with open(path, "w") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
-    SayText2(
-        f"[deepsurf] Saved segment to '{path}'").send(
-        command.index)
+    respond(f"[deepsurf] Saved segment to '{path}'", command.index)
 
 
 @TypedSayCommand("!loadcfg")
 @TypedClientCommand("dps_loadcfg")
+@TypedServerCommand("dps_loadcfg")
 def _loadcfg_handler(command, index: int = 0):
     path = f"./tf/resource/source-python/deepsurf/{server.map_name}_{index}.json"
     with open(path) as f:
         data = json.load(f)
         Segment.instance().deserialize(data)
-    SayText2(
-        f"[deepsurf] Loaded segment from '{path}'").send(
-        command.index)
+    respond(f"[deepsurf] Loaded segment from '{path}'", command.index)
 
 
 @TypedSayCommand("!spawn")
 @TypedClientCommand("dps_spawn")
+@TypedServerCommand("dps_spawn")
 def _train_handler(command):
     Bot.instance().spawn()
 
 
 @TypedSayCommand("!train")
 @TypedClientCommand("dps_train")
+@TypedServerCommand("dps_train")
 def _train_handler(command):
     if Segment.instance().is_valid() is False:
-        SayText2("[deepsurf] Invalid segment").send(command.index)
+        respond("[deepsurf] Invalid segment", command.index)
         return
 
     Bot.instance().train()
@@ -119,9 +133,10 @@ def _train_handler(command):
 
 @TypedSayCommand("!run")
 @TypedClientCommand("dps_run")
+@TypedServerCommand("dps_run")
 def _run_handler(command):
     if Segment.instance().is_valid() is False:
-        SayText2("[deepsurf] Invalid segment").send(command.index)
+        respond("[deepsurf] Invalid segment", command.index)
         return
 
     Bot.instance().run()
@@ -129,12 +144,14 @@ def _run_handler(command):
 
 @TypedSayCommand("!stop")
 @TypedClientCommand("dps_stop")
+@TypedServerCommand("dps_stop")
 def _run_handler(command):
     Bot.instance().stop()
 
 
 @TypedSayCommand("!timelimit")
 @TypedClientCommand("dps_timelimit")
+@TypedServerCommand("dps_timelimit")
 def _run_handler(command, value: int = 10):
     Bot.instance().set_time_limit(value)
-    SayText2(f"[deepsurf] Time limit set to {value}").send(command.index)
+    respond(f"[deepsurf] Time limit set to {value}", command.index)
