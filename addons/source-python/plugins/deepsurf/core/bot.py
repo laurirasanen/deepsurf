@@ -24,7 +24,7 @@ from players.constants import PlayerButtons
 
 # deepsurf
 from .helpers import CustomEntEnum
-from .helpers import get_fitness
+from .reward import DistanceReward, VelocityReward, FaceReward, RampReward
 from .hud import draw_hud
 from .zone import Segment
 
@@ -69,7 +69,7 @@ class Bot:
     conn = None
     network = None
     state = None
-    fitness = 0.0
+    reward_functions = []
 
     @staticmethod
     def instance():
@@ -113,6 +113,12 @@ class Bot:
         self.bot.set_property_uchar("m_PlayerClass.m_iClass", 7)
         self.bot.set_property_uchar("m_Shared.m_iDesiredPlayerClass", 7)
         self.bot.spawn(force=True)
+        self.reward_functions = [
+            DistanceReward(self.bot, 1.0),
+            VelocityReward(self.bot, 1.0),
+            FaceReward(self.bot, 1.0),
+            RampReward(self.bot, 1.0),
+        ]
 
     def on_spawn(self):
         self.spawned = True
@@ -136,7 +142,8 @@ class Bot:
             QAngle(0, Segment.instance().start_zone.orientation, 0),
         )
         self.state = None
-        self.fitness = 0.0
+        for rf in self.reward_functions:
+            rf.reset()
 
     def kick(self, reason):
         if self.bot is not None:
@@ -161,16 +168,18 @@ class Bot:
         self.running = False
         self.reset()
 
+    def get_reward(self):
+        reward = 0.0
+        for rf in self.reward_functions:
+            rf.tick()
+            reward += rf.get()
+        return reward
+
     def end_run(self):
-        fitness, done = get_fitness(
-            Segment.instance().start_zone.point,
-            Segment.instance().end_zone.point,
-            self.bot.origin,
-        )
-        print(f"run end, fitness: {fitness}, done: {done}")
+        print(f"run end, reward: {self.total_reward}")
 
         if self.training:
-            self.network.end_episode(fitness)
+            self.network.end_episode(self.total_reward)
 
         self.reset()
         self.start_time = server.time
@@ -191,32 +200,21 @@ class Bot:
         # use values from previous tick for optimization
         if self.state is None:
             self.state = self.get_state()
-            previous_fitness, prev_done = get_fitness(
-                Segment.instance().start_zone.point,
-                Segment.instance().end_zone.point,
-                self.bot.origin,
-            )
-        else:
-            previous_fitness = self.fitness
 
-        (move_action, aim_action, jump_action, duck_action) = self.get_action(self.state)
+        (move_action, aim_action, jump_action, duck_action) = self.get_action(
+            self.state
+        )
         bcmd = self.get_cmd(move_action, aim_action, jump_action, duck_action)
         self.controller.run_player_move(bcmd)
 
-        self.fitness, done = get_fitness(
-            Segment.instance().start_zone.point,
-            Segment.instance().end_zone.point,
-            self.bot.origin,
-        )
-        reward = self.fitness - previous_fitness
+        reward = self.get_reward()
         self.total_reward += reward
 
         time_elapsed = self.time_limit - (server.time - self.start_time)
         if server.tick % 67 == 0:
             draw_hud(self.bot, time_elapsed, self.training, self.total_reward)
 
-        if server.time > self.start_time + self.time_limit:
-            done = True
+        done = self.is_done()
 
         self.state = self.get_state()
         self.network.post_action(reward, pickle.dumps(self.state), done)
@@ -225,7 +223,9 @@ class Bot:
 
     def run_tick(self):
         self.state = self.get_state()
-        (move_action, aim_action, jump_action, duck_action) = self.get_action(self.state)
+        (move_action, aim_action, jump_action, duck_action) = self.get_action(
+            self.state
+        )
         bcmd = self.get_cmd(move_action, aim_action, jump_action, duck_action)
         self.controller.run_player_move(bcmd)
 
@@ -233,17 +233,19 @@ class Bot:
         if server.tick % 67 == 0:
             draw_hud(self.bot, time_elapsed, self.training, 0)
 
-        _, done = get_fitness(
-            Segment.instance().start_zone.point,
-            Segment.instance().end_zone.point,
-            self.bot.origin,
+        if self.is_done():
+            self.end_run()
+
+    def is_done(self):
+        end_distance = Vector.get_distance(
+            self.bot.origin, Segment.instance().end_zone.point
         )
+        done = end_distance < 100.0
 
         if server.time > self.start_time + self.time_limit:
             done = True
 
-        if done:
-            self.end_run()
+        return done
 
     def get_cmd(self, move_action=0, aim_action=0, jump_action=0, duck_action=0):
         """Get BotCmd for move direction and aim delta"""
