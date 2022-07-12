@@ -14,6 +14,8 @@ from .zone import Zone
 # >> CLASSES
 # =============================================================================
 class Checkpoint(Zone):
+    index = -1
+
     def __init__(self, index, p1=mathlib.NULL_VECTOR):
         """Create a new checkpoint."""
         super().__init__(p1)

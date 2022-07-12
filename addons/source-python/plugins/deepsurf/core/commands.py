@@ -15,7 +15,7 @@ from messages import SayText2
 from players.entity import Player
 
 # deepsurf
-from .zone import Segment, Zone
+from .zone import Segment, Zone, Checkpoint
 from .bot import Bot
 
 
@@ -57,19 +57,21 @@ def _setend_handler(command):
 def _addcp_handler(command):
     player = Player(command.index)
     origin = player.get_property_vector("m_vecOrigin")
-    index = Segment.instance().add_checkpoint(
-        Zone(Vector(origin.x, origin.y, origin.z))
+    num = Segment.instance().add_checkpoint(
+        Checkpoint(
+            len(Segment.instance().checkpoints), Vector(origin.x, origin.y, origin.z)
+        )
     )
-    respond(f"[deepsurf] Added checkpoint {index} at ({origin})", command.index)
+    respond(f"[deepsurf] Added checkpoint {num} at ({origin})", command.index)
 
 
 @TypedSayCommand("!removecp")
 @TypedClientCommand("dps_removecp")
 @TypedServerCommand("dps_removecp")
 def _removecp_handler(command):
-    index = Segment.instance().remove_checkpoint()
-    if index > 0:
-        respond(f"[deepsurf] Removed checkpoint {index}", command.index)
+    num = Segment.instance().remove_checkpoint()
+    if num > 0:
+        respond(f"[deepsurf] Removed checkpoint {num}", command.index)
     else:
         respond(f"[deepsurf] No checkpoints to remove", command.index)
 
