@@ -326,7 +326,8 @@ class Bot:
     def get_single_point(self, direction: Vector, distance: float, direction_num):
         point = {"distance": distance, "is_teleport": False}
 
-        destination = self.bot.origin + direction * distance
+        # shoot rays from above bot origin so they can "see" more of the ground / ramps, etc.
+        destination = self.bot.origin + Vector(0, 0, 48) + direction * distance
         entity_enum = CustomEntEnum(self.bot.origin, destination, (self.bot,))
 
         # Check for normal geometry
