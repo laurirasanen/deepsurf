@@ -27,6 +27,7 @@ class CustomEntEnum(EntityEnumerator):
     entity = None
     distance = 0
     origin = NULL_VECTOR
+    normal = NULL_VECTOR
 
     def __init__(self, origin, destination, filter):
         super().__init__()
@@ -43,13 +44,16 @@ class CustomEntEnum(EntityEnumerator):
                 return True
 
         trace = GameTrace()
-        engine_trace.clip_ray_to_entity(self.ray, ContentMasks.ALL, entity_handle, trace)
+        engine_trace.clip_ray_to_entity(
+            self.ray, ContentMasks.ALL, entity_handle, trace
+        )
 
         if trace.did_hit() and entity.classname == "trigger_teleport":
             distance = Vector.get_distance(self.origin, trace.end_position)
             if distance < self.distance:
                 self.distance = distance
                 self.point = trace.end_position
+                self.normal = trace.plane.normal
                 self.did_hit = True
                 self.is_teleport = True
                 self.entity = entity
@@ -63,12 +67,13 @@ class CustomEntEnum(EntityEnumerator):
             ContentMasks.ALL,
             # Ignore bot
             TraceFilterSimple(self.filter),
-            trace
+            trace,
         )
 
         if trace.did_hit():
             self.did_hit = True
             self.is_teleport = False
             self.point = trace.end_position
+            self.normal = trace.plane.normal
             self.entity = trace.entity
             self.distance = Vector.get_distance(self.origin, trace.end_position)
