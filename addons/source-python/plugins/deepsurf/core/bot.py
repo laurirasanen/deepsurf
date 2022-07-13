@@ -43,7 +43,7 @@ point_directions = []
 # the actual number of directions will be
 # x - sqrt(x) + 2, e.g. 100 -> 92
 # because we only need 1 for both directly up and down
-num_directions = int(round(math.sqrt(100)))
+num_directions = int(round(math.sqrt(256)))  # 242
 increment = 360.0 / num_directions
 theta = 0.0
 phi = 0.0
@@ -142,7 +142,7 @@ class Bot:
             return
 
         self.total_reward = 0.0
-        bcmd = self.get_cmd(0, [0.0, 0.0], 0, 0)
+        bcmd = self.get_cmd(0, 0, 0, 0, 0)
         self.controller.run_player_move(bcmd)
         self.bot.snap_to_position(
             Segment.instance().start_zone.point,
@@ -208,10 +208,16 @@ class Bot:
         if self.state is None:
             self.state = self.get_state()
 
-        (move_action, aim_action, jump_action, duck_action) = self.get_action(
-            self.state
+        (
+            move_action,
+            yaw_action,
+            pitch_action,
+            jump_action,
+            duck_action,
+        ) = self.get_action(self.state)
+        bcmd = self.get_cmd(
+            move_action, yaw_action, pitch_action, jump_action, duck_action
         )
-        bcmd = self.get_cmd(move_action, aim_action, jump_action, duck_action)
         self.controller.run_player_move(bcmd)
 
         reward = self.get_reward()
@@ -230,10 +236,16 @@ class Bot:
 
     def run_tick(self):
         self.state = self.get_state()
-        (move_action, aim_action, jump_action, duck_action) = self.get_action(
-            self.state
+        (
+            move_action,
+            yaw_action,
+            pitch_action,
+            jump_action,
+            duck_action,
+        ) = self.get_action(self.state)
+        bcmd = self.get_cmd(
+            move_action, yaw_action, pitch_action, jump_action, duck_action
         )
-        bcmd = self.get_cmd(move_action, aim_action, jump_action, duck_action)
         self.controller.run_player_move(bcmd)
 
         time_elapsed = self.time_limit - (server.time - self.start_time)
@@ -254,8 +266,22 @@ class Bot:
 
         return done
 
+    def get_angle_change(self, index):
+        if index == 0:
+            return 0.0
+
+        turn_values = 200
+
+        # min 0.05 per tick, max 5.0
+        # (3.35 /s , 335 /s)
+        if index <= turn_values / 2:
+            return index * 0.05
+
+        index -= turn_values / 2
+        return index * -0.05
+
     def get_cmd(
-        self, move_action=0, aim_action=[0.0, 0.0], jump_action=0, duck_action=0
+        self, move_action=0, yaw_action=0, pitch_action=0, jump_action=0, duck_action=0
     ):
         """Get BotCmd for move direction and aim delta"""
 
@@ -263,14 +289,14 @@ class Bot:
         bcmd.reset()
         view_angles = self.bot.view_angle
 
-        if aim_action[0] != 0:
-            view_angles.x += aim_action[0]
-            if view_angles.x < -90.0:
-                view_angles.x = -90.0
-            if view_angles.x > -90.0:
-                view_angles.x = 90.0
-        if aim_action[1] != 0:
-            view_angles.y += aim_action[1]
+        if yaw_action != 0:
+            view_angles.y += self.get_angle_change(yaw_action)
+        if pitch_action != 0:
+            view_angles.x += self.get_angle_change(pitch_action)
+            if view_angles.x < -89.0:
+                view_angles.x = -89.0
+            if view_angles.x > 89.0:
+                view_angles.x = 89.0
 
         bcmd.view_angles = view_angles
 
@@ -305,13 +331,26 @@ class Bot:
 
     def get_state(self):
         point_cloud = self.get_point_cloud()
-        velocity = self.bot.get_property_vector("m_vecVelocity")
         state = []
         for point in point_cloud:
             state.append(point["distance"])
         for point in point_cloud:
             state.append(1.0 if point["is_teleport"] else 0.0)
-        state.extend([velocity.x, velocity.y, velocity.z])
+
+        # project velocity to bots orientation
+        velocity = self.bot.get_property_vector("m_vecVelocity")
+        forward = Vector()
+        right = Vector()
+        self.bot.rotation.get_angle_vectors(forward, right)
+        state.extend([velocity.dot(forward), velocity.dot(right), velocity.z])
+
+        # project direction to end to bots orientation
+        # TODO include checkpoints
+        self.bot.rotation.get_angle_vectors(forward, right)
+        end = Segment.instance().end_zone.point
+        origin = self.bot.origin
+        diff = end - origin
+        state.extend([diff.dot(forward), diff.dot(right), diff.z])
 
         return state
 
