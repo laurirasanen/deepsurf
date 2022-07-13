@@ -242,7 +242,7 @@ class Bot:
             pitch_action,
             jump_action,
             duck_action,
-        ) = self.get_action(self.state)
+        ) = self.get_action_run(self.state)
         bcmd = self.get_cmd(
             move_action, yaw_action, pitch_action, jump_action, duck_action
         )
@@ -330,6 +330,10 @@ class Bot:
 
     def get_action(self, state):
         action = self.network.get_action(pickle.dumps(state))
+        return action
+
+    def get_action_run(self, state):
+        action = self.network.get_action_run(pickle.dumps(state))
         return action
 
     def get_state(self):
