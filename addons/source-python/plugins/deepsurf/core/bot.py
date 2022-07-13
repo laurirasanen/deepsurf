@@ -24,7 +24,13 @@ from players.constants import PlayerButtons
 
 # deepsurf
 from .helpers import CustomEntEnum
-from .reward import DistanceReward, VelocityReward, FaceReward, RampReward
+from .reward import (
+    DistanceReward,
+    VelocityReward,
+    FaceTargetReward,
+    FaceVelocityReward,
+    RampReward,
+)
 from .hud import draw_hud
 from .zone import Segment
 
@@ -116,7 +122,8 @@ class Bot:
         self.reward_functions = [
             DistanceReward(self.bot, 1.0),
             VelocityReward(self.bot, 1.0),
-            FaceReward(self.bot, 1.0),
+            FaceTargetReward(self.bot, 1.0),
+            FaceVelocityReward(self.bot, 1.0),
             RampReward(self.bot, 1.0),
         ]
 
@@ -135,7 +142,7 @@ class Bot:
             return
 
         self.total_reward = 0.0
-        bcmd = self.get_cmd(0, 0, 0, 0)
+        bcmd = self.get_cmd(0, [0.0, 0.0], 0, 0)
         self.controller.run_player_move(bcmd)
         self.bot.snap_to_position(
             Segment.instance().start_zone.point,
@@ -247,15 +254,23 @@ class Bot:
 
         return done
 
-    def get_cmd(self, move_action=0, aim_action=0, jump_action=0, duck_action=0):
+    def get_cmd(
+        self, move_action=0, aim_action=[0.0, 0.0], jump_action=0, duck_action=0
+    ):
         """Get BotCmd for move direction and aim delta"""
 
         bcmd = BotCmd()
         bcmd.reset()
         view_angles = self.bot.view_angle
 
-        if aim_action != 0:
-            view_angles.y += aim_action
+        if aim_action[0] != 0:
+            view_angles.x += aim_action[0]
+            if view_angles.x < -90.0:
+                view_angles.x = -90.0
+            if view_angles.x > -90.0:
+                view_angles.x = 90.0
+        if aim_action[1] != 0:
+            view_angles.y += aim_action[1]
 
         bcmd.view_angles = view_angles
 

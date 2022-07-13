@@ -56,7 +56,7 @@ class VelocityReward(Reward):
 
 
 # TODO: include checkpoints
-class FaceReward(Reward):
+class FaceTargetReward(Reward):
     def tick(self):
         end = Segment.instance().end_zone.point
         origin = self.bot.origin
@@ -64,6 +64,14 @@ class FaceReward(Reward):
         view_direction = want_direction
         self.bot.get_view_angle().get_angle_vectors(forward=view_direction)
         return want_direction.dot(view_direction)
+
+
+class FaceVelocityReward(Reward):
+    def tick(self):
+        velocity = self.bot.velocity.normalized()
+        view_direction = Vector(1, 0, 0)
+        self.bot.get_view_angle().get_angle_vectors(forward=view_direction)
+        return velocity.dot(view_direction) * 100.0
 
 
 class RampReward(Reward):
