@@ -43,7 +43,7 @@ point_directions = []
 # the actual number of directions will be
 # x - sqrt(x) + 2, e.g. 100 -> 92
 # because we only need 1 for both directly up and down
-num_directions = int(round(math.sqrt(256)))  # 242
+num_directions = int(round(math.sqrt(100)))
 increment = 360.0 / num_directions
 theta = 0.0
 phi = 0.0
@@ -267,18 +267,21 @@ class Bot:
         return done
 
     def get_angle_change(self, index):
-        if index == 0:
+        # numpy begone!
+        i = int(index)
+
+        if i == 0:
             return 0.0
 
         turn_values = 200
 
         # min 0.05 per tick, max 5.0
         # (3.35 /s , 335 /s)
-        if index <= turn_values / 2:
-            return index * 0.05
+        if i <= turn_values / 2:
+            return i * 0.05
 
-        index -= turn_values / 2
-        return index * -0.05
+        i -= turn_values / 2
+        return i * -0.05
 
     def get_cmd(
         self, move_action=0, yaw_action=0, pitch_action=0, jump_action=0, duck_action=0
@@ -346,6 +349,14 @@ class Bot:
 
         # project direction to end to bots orientation
         # TODO include checkpoints
+        self.bot.rotation.get_angle_vectors(forward, right)
+        end = Segment.instance().end_zone.point
+        origin = self.bot.origin
+        diff = end - origin
+        state.extend([diff.dot(forward), diff.dot(right), diff.z])
+
+        # TODO the next checkpoint / end after current one
+        # the same value if current one is the end
         self.bot.rotation.get_angle_vectors(forward, right)
         end = Segment.instance().end_zone.point
         origin = self.bot.origin
