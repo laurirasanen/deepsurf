@@ -17,6 +17,7 @@ from players.entity import Player
 # deepsurf
 from .zone import Segment, Zone, Checkpoint
 from .bot import Bot
+from .helpers import CustomEntEnum
 
 
 # Helper for responding to commands
@@ -157,3 +158,35 @@ def _run_handler(command):
 def _run_handler(command, value: int = 10):
     Bot.instance().set_time_limit(value)
     respond(f"[deepsurf] Time limit set to {value}", command.index)
+
+
+@TypedSayCommand("!place")
+@TypedClientCommand("dps_place")
+def _place_handler(command):
+    player = Player(command.index)
+    origin = player.get_property_vector("m_vecOrigin")
+    orientation = player.get_view_angle()
+    forward = Vector()
+    orientation.get_angle_vectors(forward)
+
+    destination = origin + forward * 10000.0
+    entity_enum = CustomEntEnum(
+        origin,
+        destination,
+        (
+            Bot.instance().bot,
+            player,
+        ),
+    )
+
+    # Check for normal geometry
+    entity_enum.normal_trace()
+
+    if entity_enum.did_hit:
+        Bot.instance().bot.snap_to_position(
+            entity_enum.point,
+            orientation,
+        )
+        respond(f"[deepsurf] Placing bot at ({entity_enum.point})", command.index)
+    else:
+        respond(f"[deepsurf] Did not hit a surface to place bot on", command.index)
