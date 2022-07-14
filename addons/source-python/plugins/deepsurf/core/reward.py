@@ -34,36 +34,33 @@ class Reward:
         self.previous = 0
 
 
-# TODO: include checkpoints
 class DistanceReward(Reward):
     def tick(self):
-        start = Segment.instance().start_zone.point
-        end = Segment.instance().end_zone.point
         origin = self.bot.origin
-        segment_distance = Vector.get_distance(start, end)
-        current_distance = Vector.get_distance(origin, end)
+        start = Segment.instance().start_zone.point
+        target = Segment.instance().get_remaining_points(origin)[0]
+        segment_distance = Vector.get_distance(start, target)
+        current_distance = Vector.get_distance(origin, target)
         self.current = segment_distance - current_distance
 
 
-# TODO: include checkpoints
 class VelocityReward(Reward):
     def tick(self):
-        end = Segment.instance().end_zone.point
         origin = self.bot.origin
-        want_direction = (end - origin).normalized()
+        target = Segment.instance().get_remaining_points(origin)[0]
+        want_direction = (target - origin).normalized()
         velocity = self.bot.velocity
         return want_direction.dot(velocity)
 
 
-# TODO: include checkpoints
 class FaceTargetReward(Reward):
     def tick(self):
-        end = Segment.instance().end_zone.point
         origin = self.bot.origin
-        want_direction = (end - origin).normalized()
+        target = Segment.instance().get_remaining_points(origin)[0]
+        want_direction = (target - origin).normalized()
         view_direction = want_direction
         self.bot.get_view_angle().get_angle_vectors(forward=view_direction)
-        return want_direction.dot(view_direction)
+        return want_direction.dot(view_direction) * 100.0
 
 
 class FaceVelocityReward(Reward):
@@ -84,4 +81,4 @@ class RampReward(Reward):
         entity_enum.normal_trace()
 
         if entity_enum.did_hit and entity_enum.normal.z < 0.7:
-            self.current += 1
+            self.current += 5.0

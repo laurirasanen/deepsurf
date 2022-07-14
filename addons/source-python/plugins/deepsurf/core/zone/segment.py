@@ -3,8 +3,11 @@
 # =============================================================================
 # >> IMPORTS
 # =============================================================================
+# Python
+from sys import float_info
+
 # Source.Python
-from mathlib import Vector
+from mathlib import Vector, NULL_VECTOR
 
 # deepsurf
 from .zone import Zone
@@ -88,16 +91,18 @@ class Segment:
                 "y": self.end_zone.point.y,
                 "z": self.end_zone.point.z,
             },
-            "checkpoints": []
+            "checkpoints": [],
         }
 
         for cp in self.checkpoints:
-            data["checkpoints"].append({
-                "index": cp.index,
-                "x": cp.point.x,
-                "y": cp.point.y,
-                "z": cp.point.z,
-            })
+            data["checkpoints"].append(
+                {
+                    "index": cp.index,
+                    "x": cp.point.x,
+                    "y": cp.point.y,
+                    "z": cp.point.z,
+                }
+            )
 
         return data
 
@@ -108,30 +113,21 @@ class Segment:
                 Vector(
                     data["start_zone"]["x"],
                     data["start_zone"]["y"],
-                    data["start_zone"]["z"]
+                    data["start_zone"]["z"],
                 ),
-                data["start_zone"]["orientation"]
+                data["start_zone"]["orientation"],
             )
         )
         self.set_end_zone(
             Zone(
                 Vector(
-                    data["end_zone"]["x"],
-                    data["end_zone"]["y"],
-                    data["end_zone"]["z"]
+                    data["end_zone"]["x"], data["end_zone"]["y"], data["end_zone"]["z"]
                 )
             )
         )
         for cp in data["checkpoints"]:
             self.add_checkpoint(
-                Checkpoint(
-                    cp["index"],
-                    Vector(
-                        cp["x"],
-                        cp["y"],
-                        cp["z"]
-                    )
-                )
+                Checkpoint(cp["index"], Vector(cp["x"], cp["y"], cp["z"]))
             )
 
     def is_valid(self):
@@ -140,3 +136,35 @@ class Segment:
         if self.end_zone is None:
             return False
         return True
+
+    # get a list of all the points we haven't passed yet
+    # NOTE: always includes end_zone.point even if past it
+    def get_remaining_points(self, position):
+        if not self.is_valid():
+            assert False
+
+        points = [self.start_zone.point]
+        for cp in self.checkpoints:
+            points.append(cp.point)
+        points.append(self.end_zone.point)
+
+        nearest_index = -1
+        nearest_dist = float_info.max
+        for i in range(0, len(points)):
+            dist = position.get_distance(points[i])
+            if dist < nearest_dist:
+                nearest_dist = dist
+                nearest_index = i
+
+        if nearest_index < len(points) - 1:
+            # are we past nearest point?
+            forward = points[nearest_index + 1] - points[nearest_index]
+            to_nearest = points[nearest_index] - position
+            if to_nearest.dot(forward) > 0:
+                next_index = nearest_index
+            else:
+                next_index = nearest_index + 1
+        else:
+            next_index = nearest_index
+
+        return points[next_index:]

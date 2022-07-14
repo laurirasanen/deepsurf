@@ -37,7 +37,8 @@ from .zone import Segment
 # =============================================================================
 # >> GLOBAL VARIABLES
 # =============================================================================
-debug = False
+debug_rays = False
+debug_points = False
 beam_model = Model("sprites/laserbeam.vmt")
 point_directions = []
 # the actual number of directions will be
@@ -344,21 +345,44 @@ class Bot:
         self.bot.rotation.get_angle_vectors(forward, right)
         state.extend([velocity.dot(forward), velocity.dot(right), velocity.z])
 
-        # project direction to end to bots orientation
-        # TODO include checkpoints
+        # next point direction oriented to bot space
+        remaining_points = Segment.instance().get_remaining_points(self.bot.origin)
         self.bot.rotation.get_angle_vectors(forward, right)
-        end = Segment.instance().end_zone.point
+        next_point = remaining_points[0]  # guaranteed length >= 1 if segment valid
         origin = self.bot.origin
-        diff = end - origin
+        diff = next_point - origin
         state.extend([diff.dot(forward), diff.dot(right), diff.z])
 
-        # TODO the next checkpoint / end after current one
-        # the same value if current one is the end
+        # 2nd next point oriented to bot space
+        # (same as previous if the end)
         self.bot.rotation.get_angle_vectors(forward, right)
-        end = Segment.instance().end_zone.point
+        if len(remaining_points) > 1:
+            next_point = remaining_points[1]
         origin = self.bot.origin
-        diff = end - origin
+        diff = next_point - origin
         state.extend([diff.dot(forward), diff.dot(right), diff.z])
+
+        if debug_points:
+            for i in range(0, len(remaining_points)):
+                color = [255, 0, 0]
+                end_position = remaining_points[i]
+                beam(
+                    RecipientFilter(),
+                    start=self.bot.origin,
+                    end=end_position,
+                    parent=False,
+                    life_time=1,
+                    red=color[0],
+                    green=color[1],
+                    blue=color[2],
+                    alpha=255,
+                    speed=1,
+                    model_index=beam_model.index,
+                    start_width=0.4,
+                    end_width=0.4,
+                )
+                if i >= 1:
+                    break
 
         return state
 
@@ -381,7 +405,7 @@ class Bot:
             direction_num += 1
             points.append(point)
 
-        if debug:
+        if debug_rays:
             # can only draw 32 temporary entities per frame
             self.drawn_directions += 32
 
@@ -405,7 +429,7 @@ class Bot:
             point["is_teleport"] = entity_enum.is_teleport
 
         if (
-            debug is True
+            debug_rays is True
             and self.drawn_directions - 32 < direction_num <= self.drawn_directions
         ):
             color = [255, 0, 0]
