@@ -120,11 +120,11 @@ class Bot:
         self.bot.set_property_uchar("m_Shared.m_iDesiredPlayerClass", 7)
         self.bot.spawn(force=True)
         self.reward_functions = [
-            DistanceReward(self.bot, 1.0),
-            VelocityReward(self.bot, 1.0),
-            FaceTargetReward(self.bot, 1.0),
-            FaceVelocityReward(self.bot, 1.0),
-            RampReward(self.bot, 1.0),
+            DistanceReward(self.bot, 0.5),
+            VelocityReward(self.bot, 2.0),
+            FaceTargetReward(self.bot, 2.0),
+            FaceVelocityReward(self.bot, 2.0),
+            RampReward(self.bot, 2.0),
         ]
 
     def on_spawn(self):
