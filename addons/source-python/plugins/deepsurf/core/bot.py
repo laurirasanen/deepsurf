@@ -267,27 +267,20 @@ class Bot:
         return done
 
     def get_angle_change(self, index):
-        # numpy begone!
-        i = int(index)
-
-        if i == 0:
-            return 0.0
-
         turn_values = 200
 
         # min 0.05 per tick, max 5.0
         # (3.35 /s , 335 /s)
-        if i <= turn_values / 2:
-            return i * 0.05
+        if index <= turn_values / 2:
+            return index * 0.05
 
-        i -= turn_values / 2
-        return i * -0.05
+        index -= turn_values / 2
+        return index * -0.05
 
     def get_cmd(
         self, move_action=0, yaw_action=0, pitch_action=0, jump_action=0, duck_action=0
     ):
         """Get BotCmd for move direction and aim delta"""
-
         bcmd = BotCmd()
         bcmd.reset()
         view_angles = self.bot.view_angle
