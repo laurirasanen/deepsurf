@@ -190,3 +190,11 @@ def _place_handler(command):
         respond(f"[deepsurf] Placing bot at ({entity_enum.point})", command.index)
     else:
         respond(f"[deepsurf] Did not hit a surface to place bot on", command.index)
+
+
+@TypedSayCommand("!explore")
+@TypedClientCommand("dps_explore")
+@TypedServerCommand("dps_explore")
+def _run_handler(command):
+    Bot.instance().explore()
+    respond(f"[deepsurf] Exploring", command.index)

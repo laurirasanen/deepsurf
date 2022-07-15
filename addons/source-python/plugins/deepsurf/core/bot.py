@@ -467,3 +467,6 @@ class Bot:
         if self.bot is not None:
             return self.bot.origin
         return NULL_VECTOR
+
+    def explore(self):
+        self.network.explore()
